@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>City of Newton — Affordable Housing Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Public Sans',system-ui,sans-serif;background:#F4F6F9;color:#1a1a2e;min-height:100vh}
+.header{background:#1B3A6B;padding:14px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.header-seal{width:40px;height:40px;border-radius:50%;background:#E87722;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#fff;flex-shrink:0}
+.header-text h1{font-size:16px;font-weight:600;color:#fff;letter-spacing:0.01em}
+.header-text p{font-size:12px;color:rgba(255,255,255,0.7);margin-top:1px}
+.main{padding:20px 24px;max-width:1100px;margin:0 auto}
+.section-label{font-size:11px;font-weight:600;color:#1B3A6B;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:#fff;border-radius:8px;padding:14px 16px;border-left:4px solid #1B3A6B}
+.stat-card.accent{border-left-color:#E87722}
+.stat-card.green{border-left-color:#2D7D46}
+.stat-card.slate{border-left-color:#5B6F8A}
+.stat-num{font-size:26px;font-weight:600;color:#1B3A6B;line-height:1}
+.stat-card.accent .stat-num{color:#C45E00}
+.stat-card.green .stat-num{color:#2D7D46}
+.stat-card.slate .stat-num{color:#5B6F8A}
+.stat-lbl{font-size:11px;color:#6B7280;margin-top:4px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.chart-card{background:#fff;border-radius:8px;padding:16px 18px}
+.chart-title{font-size:12px;font-weight:600;color:#374151;margin-bottom:12px}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bar-label{font-size:11px;color:#6B7280;width:90px;flex-shrink:0;text-align:right}
+.bar-track{flex:1;background:#EEF0F4;border-radius:3px;height:18px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;display:flex;align-items:center;padding-left:6px;font-size:10px;font-weight:600;color:#fff;transition:width 0.4s ease;min-width:2px}
+.bar-count{font-size:11px;color:#374151;min-width:32px;text-align:right}
+.filters-card{background:#fff;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.filters-grid{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr;gap:10px;align-items:end}
+.filter-group label{display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}
+.filter-group input,.filter-group select{width:100%;height:32px;border:1px solid #D1D5DB;border-radius:5px;padding:0 8px;font-size:12px;font-family:inherit;background:#fff;color:#111827}
+.filter-group input:focus,.filter-group select:focus{outline:2px solid #1B3A6B;outline-offset:1px;border-color:#1B3A6B}
+.results-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.results-count{font-size:12px;color:#6B7280}
+.export-btn{font-size:11px;font-weight:600;color:#1B3A6B;background:none;border:1px solid #1B3A6B;border-radius:5px;padding:4px 12px;cursor:pointer;font-family:inherit}
+.export-btn:hover{background:#EEF4FF}
+.table-card{background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+thead th{background:#1B3A6B;color:#fff;padding:9px 12px;text-align:left;font-size:11px;font-weight:600;letter-spacing:0.04em;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;transition:background 0.15s}
+thead th:hover{background:#234d94}
+tbody tr{border-bottom:1px solid #F3F4F6;cursor:pointer;transition:background 0.1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#EEF4FF}
+tbody td{padding:9px 12px;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px}
+.b-rental{background:#DBEAFE;color:#1E40AF}
+.b-ownership{background:#D1FAE5;color:#065F46}
+.b-resale{background:#FEF3C7;color:#92400E}
+.b-other{background:#F3F4F6;color:#374151}
+.empty{text-align:center;padding:40px;color:#9CA3AF;font-size:13px}
+.loading{text-align:center;padding:40px;color:#6B7280;font-size:13px}
+.error-msg{text-align:center;padding:40px;color:#B91C1C;font-size:13px}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.detail{background:#fff;border-radius:10px;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
+.detail-head{background:#1B3A6B;padding:16px 20px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:start;position:sticky;top:0}
+.detail-head h2{font-size:15px;font-weight:600;color:#fff;line-height:1.3}
+.detail-head p{font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px}
+.close-x{background:none;border:none;color:rgba(255,255,255,0.8);font-size:22px;cursor:pointer;line-height:1;padding:0 0 0 12px;flex-shrink:0}
+.close-x:hover{color:#fff}
+.detail-body{padding:16px 20px}
+.d-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.d-stat{background:#F4F6F9;border-radius:6px;padding:10px 12px}
+.d-stat-n{font-size:20px;font-weight:600;color:#1B3A6B}
+.d-stat-l{font-size:10px;color:#6B7280;margin-top:2px}
+.d-section{margin-bottom:14px}
+.d-section-title{font-size:11px;font-weight:600;color:#1B3A6B;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #E87722}
+.d-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #F3F4F6}
+.d-row:last-child{border:none}
+.d-row span:first-child{color:#6B7280}
+.d-row span:last-child{font-weight:500;color:#111827}
+.note-box{background:#FEF9EE;border-left:3px solid #E87722;border-radius:0 5px 5px 0;padding:10px 12px;font-size:11px;color:#374151;line-height:1.6;margin-top:12px}
+.ami-mini{display:flex;flex-direction:column;gap:5px}
+.ami-row{display:flex;align-items:center;gap:6px}
+.ami-label{font-size:11px;color:#6B7280;width:65px;flex-shrink:0}
+.ami-bar-track{flex:1;background:#EEF0F4;border-radius:2px;height:12px}
+.ami-bar-fill{height:100%;border-radius:2px;background:#1B3A6B}
+.ami-count{font-size:11px;color:#374151;min-width:24px;text-align:right}
+th.asc::after{content:" ↑"}
+th.desc::after{content:" ↓"}
+.skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:4px;height:14px;display:inline-block}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:768px){
+  .filters-grid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .charts-row{grid-template-columns:1fr}
+  .d-stat-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-seal">N</div>
+  <div class="header-text">
+    <h1>City of Newton — Affordable Housing Inventory</h1>
+    <p>Income-restricted housing · Updated March 2025</p>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="section-label">Citywide summary</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num" id="s-props">—</div>
+      <div class="stat-lbl">Total properties</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-num" id="s-shi">—</div>
+      <div class="stat-lbl">Units on SHI</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-num" id="s-afford">—</div>
+      <div class="stat-lbl">Affordable units (deed restricted)</div>
+    </div>
+    <div class="stat-card slate">
+      <div class="stat-num" id="s-orgs">—</div>
+      <div class="stat-lbl">Organizations</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Affordability level — units by AMI tier</div>
+      <div id="ami-chart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Bedroom mix — affordable units by size</div>
+      <div id="br-chart"></div>
+    </div>
+  </div>
+
+  <div class="filters-card">
+    <div class="section-label" style="margin-bottom:10px">Filter properties</div>
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label>Search address, property, or organization</label>
+        <input type="text" id="f-q" placeholder="e.g. Watertown St, Coleman House, 2Life…">
+      </div>
+      <div class="filter-group">
+        <label>Ward</label>
+        <select id="f-ward">
+          <option value="">All wards</option>
+          <option value="1">Ward 1</option><option value="2">Ward 2</option>
+          <option value="3">Ward 3</option><option value="4">Ward 4</option>
+          <option value="5">Ward 5</option><option value="6">Ward 6</option>
+          <option value="7">Ward 7</option><option value="8">Ward 8</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Tenure</label>
+        <select id="f-tenure">
+          <option value="">All</option>
+          <option value="rental">Rental</option>
+          <option value="ownership">Ownership</option>
+          <option value="ownership_resale">Resale</option>
+          <option value="rental_in_ownership">Rental in ownership</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Accessibility / population</label>
+        <select id="f-hh">
+          <option value="">All</option>
+          <option value="non_age_restricted">Non-age restricted</option>
+          <option value="seniors">Seniors (62+)</option>
+          <option value="seniors_60plus">Seniors (60+) or disability</option>
+          <option value="seniors_with_disabilities">Seniors w/ disabilities</option>
+          <option value="supportive">Supportive housing</option>
+          <option value="supportive_dv">Supportive — DV survivors</option>
+          <option value="supportive_veterans">Supportive — Veterans</option>
+          <option value="transitional_family">Transitional family</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>AMI tier includes</label>
+        <select id="f-ami">
+          <option value="">Any</option>
+          <option value="30">30% AMI</option>
+          <option value="50">50% AMI</option>
+          <option value="60">60% AMI</option>
+          <option value="80">80% AMI</option>
+          <option value="120">80–120% AMI</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-bar">
+    <span class="results-count" id="results-count">Loading…</span>
+    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+  </div>
+
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:25%" onclick="sortBy('address')" id="th-address">Address</th>
+          <th style="width:17%" onclick="sortBy('organization')" id="th-organization">Organization</th>
+          <th style="width:7%" onclick="sortBy('ward')" id="th-ward">Ward</th>
+          <th style="width:10%" onclick="sortBy('tenure')" id="th-tenure">Tenure</th>
+          <th style="width:9%" onclick="sortBy('total_units')" id="th-total_units">Total units</th>
+          <th style="width:9%" onclick="sortBy('units_on_shi')" id="th-units_on_shi">SHI units</th>
+          <th style="width:12%" onclick="sortBy('total_affordable_units')" id="th-total_affordable_units">Affordable units</th>
+          <th style="width:11%">Population served</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="8" class="loading">Loading properties…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Property detail overlay -->
+<div class="overlay" id="overlay" onclick="maybeClose(event)">
+  <div class="detail">
+    <div class="detail-head">
+      <div>
+        <h2 id="d-name"></h2>
+        <p id="d-addr"></p>
+      </div>
+      <button class="close-x" onclick="closeOverlay()">×</button>
+    </div>
+    <div class="detail-body">
+      <div class="d-stat-grid">
+        <div class="d-stat"><div class="d-stat-n" id="d-total">—</div><div class="d-stat-l">Total units</div></div>
+        <div class="d-stat"><div class="d-stat-n" id="d-shi">—</div><div class="d-stat-l">SHI units</div></div>
+        <div class="d-stat"><div class="d-stat-n" id="d-afford">—</div><div class="d-stat-l">Affordable units</div></div>
+        <div class="d-stat"><div class="d-stat-n" id="d-pct">—</div><div class="d-stat-l">% SHI eligible</div></div>
+      </div>
+      <div class="d-section">
+        <div class="d-section-title">Property details</div>
+        <div id="d-details"></div>
+      </div>
+      <div class="d-section">
+        <div class="d-section-title">Bedroom mix (affordable units)</div>
+        <div id="d-bedrooms"></div>
+      </div>
+      <div class="d-section">
+        <div class="d-section-title">Affordability levels (AMI)</div>
+        <div class="ami-mini" id="d-ami"></div>
+      </div>
+      <div class="note-box" id="d-note" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const HH_LABELS = {
+  non_age_restricted: "Non-age restricted",
+  seniors: "Seniors (62+)",
+  seniors_60plus: "Seniors (60+) or disability",
+  seniors_with_disabilities: "Seniors w/ disabilities",
+  supportive: "Supportive",
+  supportive_dv: "Supportive — DV survivors",
+  supportive_veterans: "Supportive — Veterans",
+  transitional_family: "Transitional family",
+  other: "Other"
+};
+const TENURE_LABELS = {
+  rental: "Rental", ownership: "Ownership",
+  ownership_resale: "Resale", rental_in_ownership: "Rental in ownership", mixed: "Mixed"
+};
+const TENURE_CLASS = {
+  rental: "b-rental", ownership: "b-ownership",
+  ownership_resale: "b-resale", rental_in_ownership: "b-other", mixed: "b-other"
+};
+
+let allRows = [];
+let sortCol = "address";
+let sortDir = "asc";
+let debounceTimer = null;
+
+function fmt(n) { return (n != null && n !== "") ? Number(n).toLocaleString() : "—"; }
+function pct(n) { return (n != null && n !== "") ? (Number(n) * 100).toFixed(0) + "%" : "—"; }
+
+function getFilters() {
+  return {
+    q: document.getElementById("f-q").value.trim(),
+    ward: document.getElementById("f-ward").value,
+    tenure: document.getElementById("f-tenure").value,
+    household_type: document.getElementById("f-hh").value,
+    ami_tier: document.getElementById("f-ami").value,
+  };
+}
+
+function buildParams(extra = {}) {
+  const f = { ...getFilters(), ...extra };
+  const p = new URLSearchParams();
+  Object.entries(f).forEach(([k, v]) => { if (v) p.set(k, v); });
+  return p;
+}
+
+async function fetchAll() {
+  const params = buildParams({ sort: sortCol, direction: sortDir });
+  const [propertiesRes, summaryRes] = await Promise.all([
+    fetch("/api/properties?" + params),
+    fetch("/api/summary?" + buildParams()),
+  ]);
+  if (!propertiesRes.ok || !summaryRes.ok) throw new Error("API error");
+  return {
+    properties: await propertiesRes.json(),
+    summary: await summaryRes.json(),
+  };
+}
+
+function applyFilters() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(loadData, 280);
+}
+
+async function loadData() {
+  try {
+    const { properties, summary } = await fetchAll();
+    allRows = properties;
+    renderStats(summary);
+    renderCharts(summary);
+    renderTable(properties);
+  } catch (e) {
+    document.getElementById("tbody").innerHTML =
+      `<tr><td colspan="8" class="error-msg">Could not load data. Is the server running?</td></tr>`;
+  }
+}
+
+function renderStats(s) {
+  document.getElementById("s-props").textContent = fmt(s.total_properties);
+  document.getElementById("s-shi").textContent = fmt(s.total_shi_units);
+  document.getElementById("s-afford").textContent = fmt(s.total_affordable_units);
+  document.getElementById("s-orgs").textContent = fmt(s.total_organizations);
+}
+
+function renderCharts(s) {
+  const ami = [
+    { label: "30% AMI", val: s.ami30, color: "#1B3A6B" },
+    { label: "50% AMI", val: s.ami50, color: "#234d94" },
+    { label: "60% AMI", val: s.ami60, color: "#E87722" },
+    { label: "80% AMI", val: s.ami80, color: "#C45E00" },
+    { label: "80–120%",  val: s.ami120, color: "#5B6F8A" },
+  ];
+  const brs = [
+    { label: "SRO",       val: s.sro,    color: "#1B3A6B" },
+    { label: "Studio",    val: s.studio, color: "#234d94" },
+    { label: "1-bedroom", val: s.br1,    color: "#E87722" },
+    { label: "2-bedroom", val: s.br2,    color: "#2D7D46" },
+    { label: "3-bedroom", val: s.br3,    color: "#5B6F8A" },
+    { label: "4+ bedroom",val: s.br4,    color: "#8B5CF6" },
+  ];
+  buildBarChart("ami-chart", ami);
+  buildBarChart("br-chart", brs);
+}
+
+function buildBarChart(id, items) {
+  const max = Math.max(...items.map(i => Number(i.val) || 0), 1);
+  document.getElementById(id).innerHTML = items.map(item => {
+    const n = Number(item.val) || 0;
+    const w = Math.round(n / max * 100);
+    return `<div class="bar-row">
+      <span class="bar-label">${item.label}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${item.color}">${n > 8 ? n : ""}</div></div>
+      <span class="bar-count">${n}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderTable(rows) {
+  document.getElementById("results-count").textContent =
+    `Showing ${rows.length.toLocaleString()} propert${rows.length === 1 ? "y" : "ies"}`;
+
+  if (!rows.length) {
+    document.getElementById("tbody").innerHTML =
+      `<tr><td colspan="8" class="empty">No properties match your filters</td></tr>`;
+    return;
+  }
+
+  document.getElementById("tbody").innerHTML = rows.map(r => `
+    <tr onclick="showDetail(${r.id})">
+      <td title="${r.address || ""}">${r.address || "—"}</td>
+      <td title="${r.organization || ""}">${r.organization || "—"}</td>
+      <td>${r.ward != null ? "Ward " + r.ward : "—"}</td>
+      <td><span class="badge ${TENURE_CLASS[r.tenure] || "b-other"}">${TENURE_LABELS[r.tenure] || r.tenure || "—"}</span></td>
+      <td>${fmt(r.total_units)}</td>
+      <td>${fmt(r.units_on_shi)}</td>
+      <td>${fmt(r.total_affordable_units)}</td>
+      <td style="color:#6B7280;font-size:11px">${HH_LABELS[r.household_type] || "—"}</td>
+    </tr>
+  `).join("");
+}
+
+function sortBy(col) {
+  if (sortCol === col) {
+    sortDir = sortDir === "asc" ? "desc" : "asc";
+  } else {
+    sortCol = col;
+    sortDir = "asc";
+  }
+  document.querySelectorAll("thead th").forEach(th => th.className = "");
+  const th = document.getElementById("th-" + col);
+  if (th) th.className = sortDir;
+  loadData();
+}
+
+async function showDetail(id) {
+  try {
+    const res = await fetch(`/api/properties/${id}`);
+    const r = await res.json();
+
+    document.getElementById("d-name").textContent = r.property_name || r.address;
+    document.getElementById("d-addr").textContent = r.address;
+    document.getElementById("d-total").textContent = fmt(r.total_units);
+    document.getElementById("d-shi").textContent = fmt(r.units_on_shi);
+    document.getElementById("d-afford").textContent = fmt(r.total_affordable_units);
+    document.getElementById("d-pct").textContent = pct(r.shi_pct);
+
+    const details = [
+      ["Organization", r.organization],
+      ["Ward", r.ward != null ? "Ward " + r.ward : null],
+      ["Tenure", TENURE_LABELS[r.tenure] || r.tenure],
+      ["Population served", HH_LABELS[r.household_type] || null],
+      ["Permit type", r.permit_type ? r.permit_type.replace(/_/g, " ") : null],
+      ["Permit date", r.permit_date || null],
+      ["Full occupancy date", r.full_occupancy_date || null],
+      ["Contact", r.contact_name && r.contact_email ? `${r.contact_name} — ${r.contact_email}` : null],
+    ].filter(([, v]) => v);
+    document.getElementById("d-details").innerHTML =
+      details.map(([k, v]) => `<div class="d-row"><span>${k}</span><span>${v}</span></div>`).join("");
+
+    const brs = [
+      ["SROs", r.affordable_sros], ["Studios", r.affordable_studio],
+      ["1-bedroom", r.affordable_1br], ["2-bedroom", r.affordable_2br],
+      ["3-bedroom", r.affordable_3br], ["4+ bedroom", r.affordable_4br_plus],
+    ].filter(([, v]) => v > 0);
+    document.getElementById("d-bedrooms").innerHTML = brs.length
+      ? brs.map(([k, v]) => `<div class="d-row"><span>${k}</span><span>${fmt(v)} units</span></div>`).join("")
+      : `<div style="font-size:12px;color:#9CA3AF;padding:6px 0">No bedroom breakdown available</div>`;
+
+    const amis = [
+      ["30% AMI", r.units_30pct_ami], ["50% AMI", r.units_50pct_ami],
+      ["60% AMI", r.units_60pct_ami], ["80% AMI", r.units_80pct_ami],
+      ["80–120% AMI", r.units_80_120pct_ami],
+    ].filter(([, v]) => v > 0);
+    const amiMax = Math.max(...amis.map(([, v]) => v), 1);
+    document.getElementById("d-ami").innerHTML = amis.length
+      ? amis.map(([k, v]) => `
+          <div class="ami-row">
+            <span class="ami-label">${k}</span>
+            <div class="ami-bar-track"><div class="ami-bar-fill" style="width:${Math.round(v / amiMax * 100)}%"></div></div>
+            <span class="ami-count">${v}</span>
+          </div>`).join("")
+      : `<div style="font-size:12px;color:#9CA3AF;padding:6px 0">No AMI breakdown available</div>`;
+
+    const nb = document.getElementById("d-note");
+    if (r.notes) { nb.textContent = r.notes; nb.style.display = "block"; }
+    else nb.style.display = "none";
+
+    document.getElementById("overlay").classList.add("open");
+  } catch (e) {
+    console.error("Failed to load property detail", e);
+  }
+}
+
+function maybeClose(e) {
+  if (e.target === document.getElementById("overlay")) closeOverlay();
+}
+function closeOverlay() {
+  document.getElementById("overlay").classList.remove("open");
+}
+
+function exportCSV() {
+  if (!allRows.length) return;
+  const cols = [
+    "address", "property_name", "organization", "ward", "tenure", "household_type",
+    "total_units", "units_on_shi", "total_affordable_units", "shi_pct",
+    "ami30", "ami50", "ami60", "ami80", "ami120",
+    "sro", "studio", "br1", "br2", "br3", "br4", "notes"
+  ];
+  const header = cols.join(",");
+  const rows = allRows.map(r =>
+    cols.map(c => {
+      const v = r[c];
+      return v == null ? "" : `"${String(v).replace(/"/g, '""')}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+  a.download = "newton_affordable_housing.csv";
+  a.click();
+}
+
+// Wire up filter events
+document.getElementById("f-q").addEventListener("input", applyFilters);
+document.getElementById("f-ward").addEventListener("change", applyFilters);
+document.getElementById("f-tenure").addEventListener("change", applyFilters);
+document.getElementById("f-hh").addEventListener("change", applyFilters);
+document.getElementById("f-ami").addEventListener("change", applyFilters);
+
+// Initial load
+loadData();
+</script>
+</body>
+</html>
