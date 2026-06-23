@@ -130,6 +130,30 @@ class PropertyUpdate(BaseModel):
         return v
 
 
+# For creating a property, address and tenure are required (NOT NULL, no default).
+# Everything else is inherited as optional, so omitted columns fall back to their
+# database defaults (the smallint counts default to 0, on_shi defaults to true).
+class PropertyCreate(PropertyUpdate):
+    address: str
+    tenure: TenureEnum
+
+
+# Organizations: only `name` is required; the rest are optional contact details.
+class OrganizationCreate(BaseModel):
+    name: str
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_nonempty(cls, v):
+        if not v.strip():
+            raise ValueError("name cannot be empty")
+        return v
+
+
 # Columns whose parameters must be explicitly cast to their PostgreSQL ENUM type
 ENUM_CASTS = {
     "tenure": "tenure_type",
@@ -269,3 +293,50 @@ def update_property(property_id: int, payload: PropertyUpdate, _: None = Depends
                 raise HTTPException(status_code=404, detail="Property not found")
             conn.commit()
     return {"status": "ok", "id": property_id}
+
+
+@app.get("/api/organizations")
+def list_organizations():
+    """Public list of organizations for dropdowns. id + name only — no contact PII."""
+    sql = "SELECT id, name FROM organizations ORDER BY name ASC"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+@app.post("/api/organizations")
+def create_organization(payload: OrganizationCreate, _: None = Depends(require_edit_auth)):
+    data = payload.model_dump(exclude_unset=True)
+    cols = list(data.keys())
+    placeholders = ["%s"] * len(cols)
+    params = list(data.values())
+    sql = f"INSERT INTO organizations ({', '.join(cols)}) VALUES ({', '.join(placeholders)}) RETURNING id, name"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            conn.commit()
+    return {"status": "ok", "id": row["id"], "name": row["name"]}
+
+
+@app.post("/api/properties")
+def create_property(payload: PropertyCreate, _: None = Depends(require_edit_auth)):
+    data = payload.model_dump(exclude_unset=True)
+    cols = []
+    placeholders = []
+    params = []
+    for col, val in data.items():
+        if isinstance(val, Enum):
+            val = val.value
+        cols.append(col)
+        cast = ENUM_CASTS.get(col)
+        placeholders.append(f"%s::{cast}" if cast else "%s")
+        params.append(val)
+    sql = f"INSERT INTO properties ({', '.join(cols)}) VALUES ({', '.join(placeholders)}) RETURNING id"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            new_id = cur.fetchone()["id"]
+            conn.commit()
+    return {"status": "ok", "id": new_id}
