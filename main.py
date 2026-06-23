@@ -1,12 +1,16 @@
 import os
+import hmac
+from enum import Enum
 from pathlib import Path
 from typing import Optional
+from datetime import date
 
 import psycopg
 from psycopg.rows import dict_row
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,15 +20,122 @@ app = FastAPI(title="Newton Affordable Housing API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["*"],
 )
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/newton_shi")
+EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD")
 
 
 def get_conn():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+
+
+def require_edit_auth(x_edit_password: Optional[str] = Header(default=None)):
+    """Gate for write endpoints. Fails closed if no password is configured."""
+    if not EDIT_PASSWORD:
+        raise HTTPException(status_code=503, detail="Editing is not configured on this server")
+    if not x_edit_password or not hmac.compare_digest(x_edit_password, EDIT_PASSWORD):
+        raise HTTPException(status_code=401, detail="Invalid or missing edit password")
+
+
+# ---------------------------------------------------------------------------
+# Enums (mirror the PostgreSQL ENUM types exactly)
+# ---------------------------------------------------------------------------
+class TenureEnum(str, Enum):
+    rental = "rental"
+    ownership = "ownership"
+    ownership_resale = "ownership_resale"
+    rental_in_ownership = "rental_in_ownership"
+    mixed = "mixed"
+
+
+class HouseholdEnum(str, Enum):
+    non_age_restricted = "non_age_restricted"
+    seniors = "seniors"
+    seniors_60plus = "seniors_60plus"
+    seniors_with_disabilities = "seniors_with_disabilities"
+    supportive = "supportive"
+    supportive_dv = "supportive_dv"
+    supportive_veterans = "supportive_veterans"
+    supportive_disability = "supportive_disability"
+    transitional_family = "transitional_family"
+    other = "other"
+
+
+class PermitEnum(str, Enum):
+    comp_permit = "comp_permit"
+    special_permit = "special_permit"
+    comp_and_special_permit = "comp_and_special_permit"
+    by_right = "by_right"
+    by_right_resale = "by_right_resale"
+    by_right_dover = "by_right_dover"
+    state_housing_667 = "state_housing_667"
+    state_housing_705 = "state_housing_705"
+    state_housing_689 = "state_housing_689"
+    federal_public_housing = "federal_public_housing"
+    section_8_nc = "section_8_nc"
+    unknown = "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Update model. Every field optional: only fields actually sent get written
+# (partial update), so omitting a field never nulls existing data.
+# ---------------------------------------------------------------------------
+class PropertyUpdate(BaseModel):
+    organization_id: Optional[int] = None
+    property_name: Optional[str] = None
+    address: Optional[str] = None
+    ward: Optional[int] = None
+    tenure: Optional[TenureEnum] = None
+    household_type: Optional[HouseholdEnum] = None
+    permit_type: Optional[PermitEnum] = None
+    on_shi: Optional[bool] = None
+    total_units: Optional[int] = None
+    units_on_shi: Optional[int] = None
+    total_affordable_units: Optional[int] = None
+    shi_pct: Optional[float] = None
+    affordable_sros: Optional[int] = None
+    affordable_studio: Optional[int] = None
+    affordable_1br: Optional[int] = None
+    affordable_2br: Optional[int] = None
+    affordable_3br: Optional[int] = None
+    affordable_4br_plus: Optional[int] = None
+    units_30pct_ami: Optional[int] = None
+    units_50pct_ami: Optional[int] = None
+    units_60pct_ami: Optional[int] = None
+    units_80pct_ami: Optional[int] = None
+    units_80_120pct_ami: Optional[int] = None
+    supportive_or_dv_units: Optional[int] = None
+    permit_date: Optional[date] = None
+    full_occupancy_date: Optional[date] = None
+    shi_expiry_date: Optional[date] = None
+    check_bedroom_mix_ok: Optional[bool] = None
+    check_afford_eq_shi: Optional[bool] = None
+    notes: Optional[str] = None
+
+    @field_validator("ward")
+    @classmethod
+    def ward_range(cls, v):
+        if v is not None and not (1 <= v <= 8):
+            raise ValueError("ward must be between 1 and 8")
+        return v
+
+    @field_validator("address")
+    @classmethod
+    def address_nonempty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("address cannot be empty")
+        return v
+
+
+# Columns whose parameters must be explicitly cast to their PostgreSQL ENUM type
+ENUM_CASTS = {
+    "tenure": "tenure_type",
+    "household_type": "household_type",
+    "permit_type": "permit_type",
+}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -131,3 +242,30 @@ def get_property(property_id: int):
             if not row:
                 raise HTTPException(status_code=404, detail="Property not found")
             return dict(row)
+
+
+@app.put("/api/properties/{property_id}")
+def update_property(property_id: int, payload: PropertyUpdate, _: None = Depends(require_edit_auth)):
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="No fields provided to update")
+
+    set_parts = []
+    params = []
+    for col, val in data.items():
+        if isinstance(val, Enum):
+            val = val.value
+        cast = ENUM_CASTS.get(col)
+        set_parts.append(f"{col} = %s::{cast}" if cast else f"{col} = %s")
+        params.append(val)
+    params.append(property_id)
+
+    sql = f"UPDATE properties SET {', '.join(set_parts)} WHERE id = %s RETURNING id"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Property not found")
+            conn.commit()
+    return {"status": "ok", "id": property_id}
