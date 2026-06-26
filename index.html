@@ -87,11 +87,32 @@ th.asc::after{content:" ↑"}
 th.desc::after{content:" ↓"}
 .skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:4px;height:14px;display:inline-block}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.edit-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.45);color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:5px;cursor:pointer;font-family:inherit;margin-right:10px;flex-shrink:0}
+.edit-btn:hover{background:rgba(255,255,255,0.28)}
+.form-section-title{font-size:11px;font-weight:600;color:#1B3A6B;text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid #E87722}
+.form-section-title:first-child{margin-top:0}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.fld{display:flex;flex-direction:column}
+.fld.col-span{grid-column:1 / -1}
+.fld label{font-size:11px;font-weight:600;color:#374151;margin-bottom:3px}
+.fld .req{color:#C45E00}
+.fld input,.fld select,.fld textarea{border:1px solid #D1D5DB;border-radius:5px;padding:6px 8px;font-size:12px;font-family:inherit;background:#fff;color:#111827;width:100%}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid #1B3A6B;outline-offset:1px;border-color:#1B3A6B}
+.fld textarea{resize:vertical;min-height:60px}
+.fld .hint{font-size:10px;color:#9CA3AF;margin-top:2px}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;position:sticky;bottom:0;background:#fff;padding:12px 0 2px;border-top:1px solid #F3F4F6}
+.btn-save{background:#1B3A6B;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-save:hover{background:#234d94}
+.btn-save:disabled{opacity:0.5;cursor:default}
+.btn-cancel{background:#fff;color:#6B7280;border:1px solid #D1D5DB;border-radius:5px;padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-cancel:hover{background:#F4F6F9}
+.form-err{background:#FEF2F2;border-left:3px solid #B91C1C;color:#991B1B;font-size:11px;padding:8px 10px;border-radius:0 4px 4px 0;margin-bottom:10px;display:none}
 @media(max-width:768px){
   .filters-grid{grid-template-columns:1fr 1fr}
   .stats-grid{grid-template-columns:1fr 1fr}
   .charts-row{grid-template-columns:1fr}
   .d-stat-grid{grid-template-columns:1fr 1fr}
+  .form-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -228,28 +249,102 @@ th.desc::after{content:" ↓"}
         <h2 id="d-name"></h2>
         <p id="d-addr"></p>
       </div>
-      <button class="close-x" onclick="closeOverlay()">×</button>
+      <div style="display:flex;align-items:center">
+        <button class="edit-btn" id="d-edit-btn" onclick="openEdit()">Edit</button>
+        <button class="close-x" onclick="closeOverlay()">×</button>
+      </div>
     </div>
     <div class="detail-body">
-      <div class="d-stat-grid">
-        <div class="d-stat"><div class="d-stat-n" id="d-total">—</div><div class="d-stat-l">Total units</div></div>
-        <div class="d-stat"><div class="d-stat-n" id="d-shi">—</div><div class="d-stat-l">SHI units</div></div>
-        <div class="d-stat"><div class="d-stat-n" id="d-afford">—</div><div class="d-stat-l">Affordable units</div></div>
-        <div class="d-stat"><div class="d-stat-n" id="d-pct">—</div><div class="d-stat-l">% SHI eligible</div></div>
+      <!-- READ VIEW -->
+      <div id="d-readview">
+        <div class="d-stat-grid">
+          <div class="d-stat"><div class="d-stat-n" id="d-total">—</div><div class="d-stat-l">Total units</div></div>
+          <div class="d-stat"><div class="d-stat-n" id="d-shi">—</div><div class="d-stat-l">SHI units</div></div>
+          <div class="d-stat"><div class="d-stat-n" id="d-afford">—</div><div class="d-stat-l">Affordable units</div></div>
+          <div class="d-stat"><div class="d-stat-n" id="d-pct">—</div><div class="d-stat-l">% SHI eligible</div></div>
+        </div>
+        <div class="d-section">
+          <div class="d-section-title">Property details</div>
+          <div id="d-details"></div>
+        </div>
+        <div class="d-section">
+          <div class="d-section-title">Bedroom mix (affordable units)</div>
+          <div id="d-bedrooms"></div>
+        </div>
+        <div class="d-section">
+          <div class="d-section-title">Affordability levels (AMI)</div>
+          <div class="ami-mini" id="d-ami"></div>
+        </div>
+        <div class="note-box" id="d-note" style="display:none"></div>
       </div>
-      <div class="d-section">
-        <div class="d-section-title">Property details</div>
-        <div id="d-details"></div>
+
+      <!-- EDIT VIEW -->
+      <div id="d-editform" style="display:none">
+        <div class="form-err" id="e-error"></div>
+
+        <div class="form-section-title">Basics</div>
+        <div class="form-grid">
+          <div class="fld col-span"><label>Property name</label><input type="text" id="e-property_name"></div>
+          <div class="fld col-span"><label>Address <span class="req">*</span></label><input type="text" id="e-address"></div>
+          <div class="fld col-span"><label>Organization</label><select id="e-organization_id"></select></div>
+          <div class="fld"><label>Ward</label><select id="e-ward"></select></div>
+          <div class="fld"><label>Tenure <span class="req">*</span></label><select id="e-tenure"></select></div>
+          <div class="fld"><label>Population served</label><select id="e-household_type"></select></div>
+          <div class="fld"><label>Permit type</label><select id="e-permit_type"></select></div>
+          <div class="fld"><label>On SHI</label><select id="e-on_shi"><option value="true">Yes</option><option value="false">No</option></select></div>
+        </div>
+
+        <div class="form-section-title">Unit totals</div>
+        <div class="form-grid">
+          <div class="fld"><label>Total units</label><input type="number" min="0" id="e-total_units"></div>
+          <div class="fld"><label>Units on SHI</label><input type="number" min="0" id="e-units_on_shi"></div>
+          <div class="fld"><label>Total affordable units</label><input type="number" min="0" id="e-total_affordable_units"></div>
+          <div class="fld"><label>Supportive / DV units</label><input type="number" min="0" id="e-supportive_or_dv_units"></div>
+          <div class="fld col-span"><label>SHI percentage</label><input type="number" step="0.0001" min="0" max="1" id="e-shi_pct"><span class="hint">Stored as a decimal fraction — 0.25 means 25%</span></div>
+        </div>
+
+        <div class="form-section-title">Bedroom mix (affordable units)</div>
+        <div class="form-grid">
+          <div class="fld"><label>SROs</label><input type="number" min="0" id="e-affordable_sros"></div>
+          <div class="fld"><label>Studios</label><input type="number" min="0" id="e-affordable_studio"></div>
+          <div class="fld"><label>1-bedroom</label><input type="number" min="0" id="e-affordable_1br"></div>
+          <div class="fld"><label>2-bedroom</label><input type="number" min="0" id="e-affordable_2br"></div>
+          <div class="fld"><label>3-bedroom</label><input type="number" min="0" id="e-affordable_3br"></div>
+          <div class="fld"><label>4+ bedroom</label><input type="number" min="0" id="e-affordable_4br_plus"></div>
+        </div>
+
+        <div class="form-section-title">Affordability levels (AMI)</div>
+        <div class="form-grid">
+          <div class="fld"><label>30% AMI</label><input type="number" min="0" id="e-units_30pct_ami"></div>
+          <div class="fld"><label>50% AMI</label><input type="number" min="0" id="e-units_50pct_ami"></div>
+          <div class="fld"><label>60% AMI</label><input type="number" min="0" id="e-units_60pct_ami"></div>
+          <div class="fld"><label>80% AMI</label><input type="number" min="0" id="e-units_80pct_ami"></div>
+          <div class="fld"><label>80–120% AMI</label><input type="number" min="0" id="e-units_80_120pct_ami"></div>
+        </div>
+
+        <div class="form-section-title">Dates</div>
+        <div class="form-grid">
+          <div class="fld"><label>Permit date</label><input type="date" id="e-permit_date"></div>
+          <div class="fld"><label>Full occupancy date</label><input type="date" id="e-full_occupancy_date"></div>
+          <div class="fld col-span"><label>SHI expiry date</label><input type="date" id="e-shi_expiry_date"></div>
+        </div>
+
+        <div class="form-section-title">Data-quality flags</div>
+        <div class="form-grid">
+          <div class="fld"><label>Bedroom mix checks out</label><select id="e-check_bedroom_mix_ok"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select></div>
+          <div class="fld"><label>Affordable = SHI</label><select id="e-check_afford_eq_shi"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select></div>
+        </div>
+
+        <div class="form-section-title">Notes</div>
+        <div class="form-grid">
+          <div class="fld col-span"><textarea id="e-notes"></textarea></div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-cancel" onclick="cancelEdit()">Cancel</button>
+          <button class="btn-save" id="e-save-btn" onclick="saveEdit()">Save changes</button>
+        </div>
       </div>
-      <div class="d-section">
-        <div class="d-section-title">Bedroom mix (affordable units)</div>
-        <div id="d-bedrooms"></div>
-      </div>
-      <div class="d-section">
-        <div class="d-section-title">Affordability levels (AMI)</div>
-        <div class="ami-mini" id="d-ami"></div>
-      </div>
-      <div class="note-box" id="d-note" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -263,8 +358,23 @@ const HH_LABELS = {
   supportive: "Supportive",
   supportive_dv: "Supportive — DV survivors",
   supportive_veterans: "Supportive — Veterans",
+  supportive_disability: "Supportive — disability",
   transitional_family: "Transitional family",
   other: "Other"
+};
+const PERMIT_LABELS = {
+  comp_permit: "Comprehensive permit",
+  special_permit: "Special permit",
+  comp_and_special_permit: "Comp. + special permit",
+  by_right: "By right",
+  by_right_resale: "By right (resale)",
+  by_right_dover: "By right (Dover)",
+  state_housing_667: "State housing 667",
+  state_housing_705: "State housing 705",
+  state_housing_689: "State housing 689",
+  federal_public_housing: "Federal public housing",
+  section_8_nc: "Section 8 NC",
+  unknown: "Unknown"
 };
 const TENURE_LABELS = {
   rental: "Rental", ownership: "Ownership",
@@ -279,6 +389,10 @@ let allRows = [];
 let sortCol = "address";
 let sortDir = "asc";
 let debounceTimer = null;
+let editPassword = null;
+let orgList = null;
+let currentProperty = null;
+let selectsBuilt = false;
 
 function fmt(n) { return (n != null && n !== "") ? Number(n).toLocaleString() : "—"; }
 function pct(n) { return (n != null && n !== "") ? (Number(n) * 100).toFixed(0) + "%" : "—"; }
@@ -412,6 +526,12 @@ async function showDetail(id) {
   try {
     const res = await fetch(`/api/properties/${id}`);
     const r = await res.json();
+    currentProperty = r;
+
+    // Always open in read mode
+    document.getElementById("d-readview").style.display = "block";
+    document.getElementById("d-editform").style.display = "none";
+    document.getElementById("d-edit-btn").style.display = "block";
 
     document.getElementById("d-name").textContent = r.property_name || r.address;
     document.getElementById("d-addr").textContent = r.address;
@@ -472,6 +592,175 @@ function maybeClose(e) {
 }
 function closeOverlay() {
   document.getElementById("overlay").classList.remove("open");
+}
+
+// ---------- Edit form ----------
+function opt(value, label, selected) {
+  return `<option value="${value}"${selected ? " selected" : ""}>${label}</option>`;
+}
+
+async function loadOrgs() {
+  if (orgList) return orgList;
+  const res = await fetch("/api/organizations");
+  orgList = await res.json();
+  return orgList;
+}
+
+async function buildSelects() {
+  // Tenure (required — no blank option)
+  document.getElementById("e-tenure").innerHTML =
+    Object.entries(TENURE_LABELS).map(([v, l]) => opt(v, l)).join("");
+  // Household type (optional — blank allowed)
+  document.getElementById("e-household_type").innerHTML =
+    `<option value="">—</option>` + Object.entries(HH_LABELS).map(([v, l]) => opt(v, l)).join("");
+  // Permit type (optional)
+  document.getElementById("e-permit_type").innerHTML =
+    `<option value="">—</option>` + Object.entries(PERMIT_LABELS).map(([v, l]) => opt(v, l)).join("");
+  // Ward 1–8 (optional)
+  document.getElementById("e-ward").innerHTML =
+    `<option value="">—</option>` + [1,2,3,4,5,6,7,8].map(w => opt(w, "Ward " + w)).join("");
+  // Organizations (optional)
+  const orgs = await loadOrgs();
+  document.getElementById("e-organization_id").innerHTML =
+    `<option value="">—</option>` + orgs.map(o => opt(o.id, o.name)).join("");
+  selectsBuilt = true;
+}
+
+function setVal(id, v) {
+  document.getElementById(id).value = (v == null) ? "" : v;
+}
+
+async function openEdit() {
+  if (!currentProperty) return;
+  if (!selectsBuilt) await buildSelects();
+  const r = currentProperty;
+
+  setVal("e-property_name", r.property_name);
+  setVal("e-address", r.address);
+  setVal("e-organization_id", r.organization_id);
+  setVal("e-ward", r.ward);
+  setVal("e-tenure", r.tenure);
+  setVal("e-household_type", r.household_type);
+  setVal("e-permit_type", r.permit_type);
+  setVal("e-on_shi", r.on_shi ? "true" : "false");
+  setVal("e-total_units", r.total_units);
+  setVal("e-units_on_shi", r.units_on_shi);
+  setVal("e-total_affordable_units", r.total_affordable_units);
+  setVal("e-supportive_or_dv_units", r.supportive_or_dv_units);
+  setVal("e-shi_pct", r.shi_pct);
+  setVal("e-affordable_sros", r.affordable_sros);
+  setVal("e-affordable_studio", r.affordable_studio);
+  setVal("e-affordable_1br", r.affordable_1br);
+  setVal("e-affordable_2br", r.affordable_2br);
+  setVal("e-affordable_3br", r.affordable_3br);
+  setVal("e-affordable_4br_plus", r.affordable_4br_plus);
+  setVal("e-units_30pct_ami", r.units_30pct_ami);
+  setVal("e-units_50pct_ami", r.units_50pct_ami);
+  setVal("e-units_60pct_ami", r.units_60pct_ami);
+  setVal("e-units_80pct_ami", r.units_80pct_ami);
+  setVal("e-units_80_120pct_ami", r.units_80_120pct_ami);
+  setVal("e-permit_date", r.permit_date);
+  setVal("e-full_occupancy_date", r.full_occupancy_date);
+  setVal("e-shi_expiry_date", r.shi_expiry_date);
+  setVal("e-check_bedroom_mix_ok", r.check_bedroom_mix_ok == null ? "" : String(r.check_bedroom_mix_ok));
+  setVal("e-check_afford_eq_shi", r.check_afford_eq_shi == null ? "" : String(r.check_afford_eq_shi));
+  setVal("e-notes", r.notes);
+
+  document.getElementById("e-error").style.display = "none";
+  document.getElementById("d-readview").style.display = "none";
+  document.getElementById("d-editform").style.display = "block";
+  document.getElementById("d-edit-btn").style.display = "none";
+}
+
+function cancelEdit() {
+  document.getElementById("d-editform").style.display = "none";
+  document.getElementById("d-readview").style.display = "block";
+  document.getElementById("d-edit-btn").style.display = "block";
+}
+
+function formError(msg) {
+  const el = document.getElementById("e-error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+// Read helpers: "" -> null
+function txt(id) { const v = document.getElementById(id).value.trim(); return v === "" ? null : v; }
+function num(id) { const v = document.getElementById(id).value.trim(); return v === "" ? null : Number(v); }
+function tri(id) { const v = document.getElementById(id).value; return v === "" ? null : (v === "true"); }
+
+async function saveEdit() {
+  const address = document.getElementById("e-address").value.trim();
+  const tenure = document.getElementById("e-tenure").value;
+  if (!address) { formError("Address is required."); return; }
+  if (!tenure) { formError("Tenure is required."); return; }
+
+  if (!editPassword) {
+    const pw = prompt("Enter the edit password to save:");
+    if (!pw) return;
+    editPassword = pw.trim();
+  }
+
+  const payload = {
+    property_name: txt("e-property_name"),
+    address: address,
+    organization_id: num("e-organization_id"),
+    ward: num("e-ward"),
+    tenure: tenure,
+    household_type: txt("e-household_type"),
+    permit_type: txt("e-permit_type"),
+    on_shi: document.getElementById("e-on_shi").value === "true",
+    total_units: num("e-total_units"),
+    units_on_shi: num("e-units_on_shi"),
+    total_affordable_units: num("e-total_affordable_units"),
+    supportive_or_dv_units: num("e-supportive_or_dv_units"),
+    shi_pct: num("e-shi_pct"),
+    affordable_sros: num("e-affordable_sros"),
+    affordable_studio: num("e-affordable_studio"),
+    affordable_1br: num("e-affordable_1br"),
+    affordable_2br: num("e-affordable_2br"),
+    affordable_3br: num("e-affordable_3br"),
+    affordable_4br_plus: num("e-affordable_4br_plus"),
+    units_30pct_ami: num("e-units_30pct_ami"),
+    units_50pct_ami: num("e-units_50pct_ami"),
+    units_60pct_ami: num("e-units_60pct_ami"),
+    units_80pct_ami: num("e-units_80pct_ami"),
+    units_80_120pct_ami: num("e-units_80_120pct_ami"),
+    permit_date: txt("e-permit_date"),
+    full_occupancy_date: txt("e-full_occupancy_date"),
+    shi_expiry_date: txt("e-shi_expiry_date"),
+    check_bedroom_mix_ok: tri("e-check_bedroom_mix_ok"),
+    check_afford_eq_shi: tri("e-check_afford_eq_shi"),
+    notes: txt("e-notes"),
+  };
+
+  const btn = document.getElementById("e-save-btn");
+  btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    const res = await fetch(`/api/properties/${currentProperty.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Edit-Password": editPassword },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) {
+      editPassword = null;
+      formError("That password was rejected. Click Save changes to try again.");
+      return;
+    }
+    if (!res.ok) {
+      let detail = res.status;
+      try { const j = await res.json(); detail = JSON.stringify(j.detail || j); } catch (e) {}
+      formError("Save failed: " + detail);
+      return;
+    }
+    // Success — reload the panel (read mode) and refresh the table
+    await showDetail(currentProperty.id);
+    await loadData();
+  } catch (e) {
+    formError("Network error while saving — is the server running?");
+  } finally {
+    btn.disabled = false; btn.textContent = "Save changes";
+  }
 }
 
 function exportCSV() {
