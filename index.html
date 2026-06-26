@@ -524,7 +524,9 @@ function sortBy(col) {
 
 async function showDetail(id) {
   try {
-    const res = await fetch(`/api/properties/${id}`);
+    const headers = {};
+    if (editPassword) headers["X-Edit-Password"] = editPassword;
+    const res = await fetch(`/api/properties/${id}`, { headers });
     const r = await res.json();
     currentProperty = r;
 

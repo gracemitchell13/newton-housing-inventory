@@ -32,11 +32,16 @@ def get_conn():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
+def is_valid_edit_password(x_edit_password: Optional[str]) -> bool:
+    """Non-raising password check, for endpoints that adapt their output rather than reject."""
+    return bool(EDIT_PASSWORD) and bool(x_edit_password) and hmac.compare_digest(x_edit_password, EDIT_PASSWORD)
+
+
 def require_edit_auth(x_edit_password: Optional[str] = Header(default=None)):
     """Gate for write endpoints. Fails closed if no password is configured."""
     if not EDIT_PASSWORD:
         raise HTTPException(status_code=503, detail="Editing is not configured on this server")
-    if not x_edit_password or not hmac.compare_digest(x_edit_password, EDIT_PASSWORD):
+    if not is_valid_edit_password(x_edit_password):
         raise HTTPException(status_code=401, detail="Invalid or missing edit password")
 
 
@@ -252,7 +257,8 @@ def get_properties(q: Optional[str]=None, ward: Optional[int]=None, tenure: Opti
 
 
 @app.get("/api/properties/{property_id}")
-def get_property(property_id: int):
+def get_property(property_id: int, x_edit_password: Optional[str] = Header(default=None)):
+    authed = is_valid_edit_password(x_edit_password)
     sql = """
         SELECT p.*, o.name AS organization, o.contact_name, o.contact_email, o.contact_phone
         FROM properties p
@@ -265,7 +271,12 @@ def get_property(property_id: int):
             row = cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Property not found")
-            return dict(row)
+            result = dict(row)
+            # Contact details are PII — only return them to an authenticated editor
+            if not authed:
+                for field in ("contact_name", "contact_email", "contact_phone"):
+                    result.pop(field, None)
+            return result
 
 
 @app.put("/api/properties/{property_id}")
