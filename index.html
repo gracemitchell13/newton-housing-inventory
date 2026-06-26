@@ -45,6 +45,11 @@ body{font-family:'Public Sans',system-ui,sans-serif;background:#F4F6F9;color:#1a
 .results-count{font-size:12px;color:#6B7280}
 .export-btn{font-size:11px;font-weight:600;color:#1B3A6B;background:none;border:1px solid #1B3A6B;border-radius:5px;padding:4px 12px;cursor:pointer;font-family:inherit}
 .export-btn:hover{background:#EEF4FF}
+.add-btn{font-size:11px;font-weight:600;color:#fff;background:#E87722;border:1px solid #E87722;border-radius:5px;padding:4px 12px;cursor:pointer;font-family:inherit;margin-right:8px}
+.add-btn:hover{background:#d56a16}
+.toolbar-actions{display:flex;align-items:center}
+.new-org-box{background:#FEF9EE;border:1px solid #F2D9B8;border-radius:6px;padding:10px 12px;margin-top:2px}
+.new-org-box>label{font-size:11px;font-weight:600;color:#374151;margin-bottom:3px;display:block}
 .table-card{background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB}
 table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
 thead th{background:#1B3A6B;color:#fff;padding:9px 12px;text-align:left;font-size:11px;font-weight:600;letter-spacing:0.04em;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;transition:background 0.15s}
@@ -221,7 +226,10 @@ th.desc::after{content:" ↓"}
 
   <div class="results-bar">
     <span class="results-count" id="results-count">Loading…</span>
-    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    <div class="toolbar-actions">
+      <button class="add-btn" id="add-prop-btn" onclick="openAdd()" style="display:none">+ Add property</button>
+      <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    </div>
   </div>
 
   <div class="table-card">
@@ -291,7 +299,18 @@ th.desc::after{content:" ↓"}
         <div class="form-grid">
           <div class="fld col-span"><label>Property name</label><input type="text" id="e-property_name"></div>
           <div class="fld col-span"><label>Address <span class="req">*</span></label><input type="text" id="e-address"></div>
-          <div class="fld col-span"><label>Organization</label><select id="e-organization_id"></select></div>
+          <div class="fld col-span"><label>Organization</label><select id="e-organization_id" onchange="toggleNewOrg()"></select></div>
+          <div class="fld col-span" id="new-org-fields" style="display:none">
+            <div class="new-org-box">
+              <label>New organization name <span class="req">*</span></label>
+              <input type="text" id="e-new_org_name" placeholder="e.g. Newton Community Development Corp">
+              <div class="form-grid" style="margin-top:8px">
+                <div class="fld"><label>Contact name</label><input type="text" id="e-new_org_contact_name"></div>
+                <div class="fld"><label>Contact email</label><input type="email" id="e-new_org_contact_email"></div>
+                <div class="fld col-span"><label>Contact phone</label><input type="text" id="e-new_org_contact_phone"></div>
+              </div>
+            </div>
+          </div>
           <div class="fld"><label>Ward</label><select id="e-ward"></select></div>
           <div class="fld"><label>Tenure <span class="req">*</span></label><select id="e-tenure"></select></div>
           <div class="fld"><label>Population served</label><select id="e-household_type"></select></div>
@@ -398,6 +417,7 @@ let editPassword = null;
 let orgList = null;
 let currentProperty = null;
 let selectsBuilt = false;
+let formMode = "edit";
 
 function fmt(n) { return (n != null && n !== "") ? Number(n).toLocaleString() : "—"; }
 function pct(n) { return (n != null && n !== "") ? (Number(n) * 100).toFixed(0) + "%" : "—"; }
@@ -600,6 +620,7 @@ function maybeClose(e) {
 }
 function closeOverlay() {
   document.getElementById("overlay").classList.remove("open");
+  formMode = "edit";
 }
 
 // ---------- Login / editor session ----------
@@ -609,7 +630,8 @@ async function toggleLogin() {
     editPassword = null;
     updateAuthUI();
     const open = document.getElementById("overlay").classList.contains("open");
-    if (open && currentProperty) { cancelEdit(); await showDetail(currentProperty.id); }
+    if (open && formMode === "add") { closeOverlay(); }
+    else if (open && currentProperty) { cancelEdit(); await showDetail(currentProperty.id); }
     return;
   }
   const pw = prompt("Enter the edit password:");
@@ -636,8 +658,14 @@ async function toggleLogin() {
 
 function updateAuthUI() {
   const btn = document.getElementById("login-btn");
-  if (editPassword) { btn.textContent = "Log out"; btn.classList.add("active"); }
-  else { btn.textContent = "Log in to edit"; btn.classList.remove("active"); }
+  const addBtn = document.getElementById("add-prop-btn");
+  if (editPassword) {
+    btn.textContent = "Log out"; btn.classList.add("active");
+    if (addBtn) addBtn.style.display = "inline-block";
+  } else {
+    btn.textContent = "Log in to edit"; btn.classList.remove("active");
+    if (addBtn) addBtn.style.display = "none";
+  }
 }
 
 // ---------- Edit form ----------
@@ -665,11 +693,17 @@ async function buildSelects() {
   // Ward 1–8 (optional)
   document.getElementById("e-ward").innerHTML =
     `<option value="">—</option>` + [1,2,3,4,5,6,7,8].map(w => opt(w, "Ward " + w)).join("");
-  // Organizations (optional)
+  // Organizations (optional) — with a "create new" option at the bottom
   const orgs = await loadOrgs();
   document.getElementById("e-organization_id").innerHTML =
-    `<option value="">—</option>` + orgs.map(o => opt(o.id, o.name)).join("");
+    `<option value="">—</option>` + orgs.map(o => opt(o.id, o.name)).join("") +
+    `<option value="__new__">+ Add a new organization…</option>`;
   selectsBuilt = true;
+}
+
+function toggleNewOrg() {
+  const show = document.getElementById("e-organization_id").value === "__new__";
+  document.getElementById("new-org-fields").style.display = show ? "block" : "none";
 }
 
 function setVal(id, v) {
@@ -679,6 +713,7 @@ function setVal(id, v) {
 async function openEdit() {
   if (!currentProperty) return;
   if (!selectsBuilt) await buildSelects();
+  formMode = "edit";
   const r = currentProperty;
 
   setVal("e-property_name", r.property_name);
@@ -712,13 +747,45 @@ async function openEdit() {
   setVal("e-check_afford_eq_shi", r.check_afford_eq_shi == null ? "" : String(r.check_afford_eq_shi));
   setVal("e-notes", r.notes);
 
+  toggleNewOrg();
+  document.getElementById("e-save-btn").textContent = "Save changes";
   document.getElementById("e-error").style.display = "none";
   document.getElementById("d-readview").style.display = "none";
   document.getElementById("d-editform").style.display = "block";
   document.getElementById("d-edit-btn").style.display = "none";
 }
 
+function clearForm() {
+  ["e-property_name","e-address","e-organization_id","e-ward","e-tenure","e-household_type",
+   "e-permit_type","e-total_units","e-units_on_shi","e-total_affordable_units","e-supportive_or_dv_units",
+   "e-shi_pct","e-affordable_sros","e-affordable_studio","e-affordable_1br","e-affordable_2br",
+   "e-affordable_3br","e-affordable_4br_plus","e-units_30pct_ami","e-units_50pct_ami","e-units_60pct_ami",
+   "e-units_80pct_ami","e-units_80_120pct_ami","e-permit_date","e-full_occupancy_date","e-shi_expiry_date",
+   "e-check_bedroom_mix_ok","e-check_afford_eq_shi","e-notes","e-new_org_name","e-new_org_contact_name",
+   "e-new_org_contact_email","e-new_org_contact_phone"].forEach(id => { document.getElementById(id).value = ""; });
+  document.getElementById("e-on_shi").value = "true";
+}
+
+async function openAdd() {
+  if (!editPassword) { alert("Log in to edit before adding a property."); return; }
+  if (!selectsBuilt) await buildSelects();
+  formMode = "add";
+  currentProperty = null;
+  clearForm();
+  toggleNewOrg();
+
+  document.getElementById("d-name").textContent = "Add property";
+  document.getElementById("d-addr").textContent = "New entry";
+  document.getElementById("e-save-btn").textContent = "Add property";
+  document.getElementById("e-error").style.display = "none";
+  document.getElementById("d-readview").style.display = "none";
+  document.getElementById("d-editform").style.display = "block";
+  document.getElementById("d-edit-btn").style.display = "none";
+  document.getElementById("overlay").classList.add("open");
+}
+
 function cancelEdit() {
+  if (formMode === "add") { closeOverlay(); return; }
   document.getElementById("d-editform").style.display = "none";
   document.getElementById("d-readview").style.display = "block";
   document.getElementById("d-edit-btn").style.display = "block";
@@ -741,71 +808,96 @@ async function saveEdit() {
   if (!address) { formError("Address is required."); return; }
   if (!tenure) { formError("Tenure is required."); return; }
 
+  const orgSel = document.getElementById("e-organization_id").value;
+  const creatingOrg = (orgSel === "__new__");
+  if (creatingOrg && !document.getElementById("e-new_org_name").value.trim()) {
+    formError("New organization name is required.");
+    return;
+  }
+
   if (!editPassword) {
     const pw = prompt("Enter the edit password to save:");
     if (!pw) return;
     editPassword = pw.trim();
+    updateAuthUI();
   }
-
-  const payload = {
-    property_name: txt("e-property_name"),
-    address: address,
-    organization_id: num("e-organization_id"),
-    ward: num("e-ward"),
-    tenure: tenure,
-    household_type: txt("e-household_type"),
-    permit_type: txt("e-permit_type"),
-    on_shi: document.getElementById("e-on_shi").value === "true",
-    total_units: num("e-total_units"),
-    units_on_shi: num("e-units_on_shi"),
-    total_affordable_units: num("e-total_affordable_units"),
-    supportive_or_dv_units: num("e-supportive_or_dv_units"),
-    shi_pct: num("e-shi_pct"),
-    affordable_sros: num("e-affordable_sros"),
-    affordable_studio: num("e-affordable_studio"),
-    affordable_1br: num("e-affordable_1br"),
-    affordable_2br: num("e-affordable_2br"),
-    affordable_3br: num("e-affordable_3br"),
-    affordable_4br_plus: num("e-affordable_4br_plus"),
-    units_30pct_ami: num("e-units_30pct_ami"),
-    units_50pct_ami: num("e-units_50pct_ami"),
-    units_60pct_ami: num("e-units_60pct_ami"),
-    units_80pct_ami: num("e-units_80pct_ami"),
-    units_80_120pct_ami: num("e-units_80_120pct_ami"),
-    permit_date: txt("e-permit_date"),
-    full_occupancy_date: txt("e-full_occupancy_date"),
-    shi_expiry_date: txt("e-shi_expiry_date"),
-    check_bedroom_mix_ok: tri("e-check_bedroom_mix_ok"),
-    check_afford_eq_shi: tri("e-check_afford_eq_shi"),
-    notes: txt("e-notes"),
-  };
-
+  const authHeaders = { "Content-Type": "application/json", "X-Edit-Password": editPassword };
+  const isAdd = (formMode === "add");
+  const saveLabel = isAdd ? "Add property" : "Save changes";
   const btn = document.getElementById("e-save-btn");
   btn.disabled = true; btn.textContent = "Saving…";
+
   try {
-    const res = await fetch(`/api/properties/${currentProperty.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "X-Edit-Password": editPassword },
-      body: JSON.stringify(payload),
-    });
-    if (res.status === 401) {
-      editPassword = null;
-      formError("That password was rejected. Click Save changes to try again.");
-      return;
+    // Step 1: create the organization first, if requested
+    let orgId = (orgSel === "" || orgSel === "__new__") ? null : Number(orgSel);
+    if (creatingOrg) {
+      const orgRes = await fetch("/api/organizations", {
+        method: "POST", headers: authHeaders,
+        body: JSON.stringify({
+          name: document.getElementById("e-new_org_name").value.trim(),
+          contact_name: txt("e-new_org_contact_name"),
+          contact_email: txt("e-new_org_contact_email"),
+          contact_phone: txt("e-new_org_contact_phone"),
+        }),
+      });
+      if (orgRes.status === 401) { editPassword = null; updateAuthUI(); formError("Password rejected — click Save to try again."); return; }
+      if (!orgRes.ok) { formError("Could not create the organization. Property was not saved."); return; }
+      orgId = (await orgRes.json()).id;
+      orgList = null; selectsBuilt = false;  // refresh dropdown next time
     }
+
+    // Step 2: build the property payload
+    const payload = {
+      property_name: txt("e-property_name"),
+      address: address,
+      organization_id: orgId,
+      ward: num("e-ward"),
+      tenure: tenure,
+      household_type: txt("e-household_type"),
+      permit_type: txt("e-permit_type"),
+      on_shi: document.getElementById("e-on_shi").value === "true",
+      total_units: num("e-total_units"),
+      units_on_shi: num("e-units_on_shi"),
+      total_affordable_units: num("e-total_affordable_units"),
+      supportive_or_dv_units: num("e-supportive_or_dv_units"),
+      shi_pct: num("e-shi_pct"),
+      affordable_sros: num("e-affordable_sros"),
+      affordable_studio: num("e-affordable_studio"),
+      affordable_1br: num("e-affordable_1br"),
+      affordable_2br: num("e-affordable_2br"),
+      affordable_3br: num("e-affordable_3br"),
+      affordable_4br_plus: num("e-affordable_4br_plus"),
+      units_30pct_ami: num("e-units_30pct_ami"),
+      units_50pct_ami: num("e-units_50pct_ami"),
+      units_60pct_ami: num("e-units_60pct_ami"),
+      units_80pct_ami: num("e-units_80pct_ami"),
+      units_80_120pct_ami: num("e-units_80_120pct_ami"),
+      permit_date: txt("e-permit_date"),
+      full_occupancy_date: txt("e-full_occupancy_date"),
+      shi_expiry_date: txt("e-shi_expiry_date"),
+      check_bedroom_mix_ok: tri("e-check_bedroom_mix_ok"),
+      check_afford_eq_shi: tri("e-check_afford_eq_shi"),
+      notes: txt("e-notes"),
+    };
+
+    // Step 3: POST (add) or PUT (edit)
+    const url = isAdd ? "/api/properties" : `/api/properties/${currentProperty.id}`;
+    const res = await fetch(url, { method: isAdd ? "POST" : "PUT", headers: authHeaders, body: JSON.stringify(payload) });
+    if (res.status === 401) { editPassword = null; updateAuthUI(); formError("Password rejected — click Save to try again."); return; }
     if (!res.ok) {
       let detail = res.status;
       try { const j = await res.json(); detail = JSON.stringify(j.detail || j); } catch (e) {}
       formError("Save failed: " + detail);
       return;
     }
-    // Success — reload the panel (read mode) and refresh the table
-    await showDetail(currentProperty.id);
+    const result = await res.json();
+    if (creatingOrg) await buildSelects();   // rebuild dropdown with the new org
     await loadData();
+    await showDetail(isAdd ? result.id : currentProperty.id);  // open the saved property in read mode
   } catch (e) {
     formError("Network error while saving — is the server running?");
   } finally {
-    btn.disabled = false; btn.textContent = "Save changes";
+    btn.disabled = false; btn.textContent = saveLabel;
   }
 }
 
