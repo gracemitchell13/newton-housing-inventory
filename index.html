@@ -12,6 +12,10 @@ body{font-family:'Public Sans',system-ui,sans-serif;background:#F4F6F9;color:#1a
 .header-seal{width:40px;height:40px;border-radius:50%;background:#E87722;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#fff;flex-shrink:0}
 .header-text h1{font-size:16px;font-weight:600;color:#fff;letter-spacing:0.01em}
 .header-text p{font-size:12px;color:rgba(255,255,255,0.7);margin-top:1px}
+.login-btn{margin-left:auto;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.45);color:#fff;font-size:12px;font-weight:600;padding:7px 14px;border-radius:5px;cursor:pointer;font-family:inherit;flex-shrink:0}
+.login-btn:hover{background:rgba(255,255,255,0.28)}
+.login-btn.active{background:#E87722;border-color:#E87722}
+.login-btn.active:hover{background:#d56a16}
 .main{padding:20px 24px;max-width:1100px;margin:0 auto}
 .section-label{font-size:11px;font-weight:600;color:#1B3A6B;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
 .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
@@ -124,6 +128,7 @@ th.desc::after{content:" ↓"}
     <h1>City of Newton — Affordable Housing Inventory</h1>
     <p>Income-restricted housing · Updated March 2025</p>
   </div>
+  <button class="login-btn" id="login-btn" onclick="toggleLogin()">Log in to edit</button>
 </div>
 
 <div class="main">
@@ -526,14 +531,14 @@ async function showDetail(id) {
   try {
     const headers = {};
     if (editPassword) headers["X-Edit-Password"] = editPassword;
-    const res = await fetch(`/api/properties/${id}`, { headers });
+    const res = await fetch(`/api/properties/${id}`, { headers, cache: "no-store" });
     const r = await res.json();
     currentProperty = r;
 
     // Always open in read mode
     document.getElementById("d-readview").style.display = "block";
     document.getElementById("d-editform").style.display = "none";
-    document.getElementById("d-edit-btn").style.display = "block";
+    document.getElementById("d-edit-btn").style.display = editPassword ? "block" : "none";
 
     document.getElementById("d-name").textContent = r.property_name || r.address;
     document.getElementById("d-addr").textContent = r.address;
@@ -542,6 +547,7 @@ async function showDetail(id) {
     document.getElementById("d-afford").textContent = fmt(r.total_affordable_units);
     document.getElementById("d-pct").textContent = pct(r.shi_pct);
 
+    const contactBits = [r.contact_name, r.contact_email, r.contact_phone].filter(Boolean);
     const details = [
       ["Organization", r.organization],
       ["Ward", r.ward != null ? "Ward " + r.ward : null],
@@ -550,7 +556,7 @@ async function showDetail(id) {
       ["Permit type", r.permit_type ? r.permit_type.replace(/_/g, " ") : null],
       ["Permit date", r.permit_date || null],
       ["Full occupancy date", r.full_occupancy_date || null],
-      ["Contact", r.contact_name && r.contact_email ? `${r.contact_name} — ${r.contact_email}` : null],
+      ["Contact", contactBits.length ? contactBits.join(" — ") : null],
     ].filter(([, v]) => v);
     document.getElementById("d-details").innerHTML =
       details.map(([k, v]) => `<div class="d-row"><span>${k}</span><span>${v}</span></div>`).join("");
@@ -594,6 +600,44 @@ function maybeClose(e) {
 }
 function closeOverlay() {
   document.getElementById("overlay").classList.remove("open");
+}
+
+// ---------- Login / editor session ----------
+async function toggleLogin() {
+  if (editPassword) {
+    // Log out
+    editPassword = null;
+    updateAuthUI();
+    const open = document.getElementById("overlay").classList.contains("open");
+    if (open && currentProperty) { cancelEdit(); await showDetail(currentProperty.id); }
+    return;
+  }
+  const pw = prompt("Enter the edit password:");
+  if (!pw) return;
+  const candidate = pw.trim();
+  try {
+    const res = await fetch("/api/auth/check", { headers: { "X-Edit-Password": candidate } });
+    if (res.status === 200) {
+      editPassword = candidate;
+      updateAuthUI();
+      const open = document.getElementById("overlay").classList.contains("open");
+      if (open && currentProperty) await showDetail(currentProperty.id);
+    } else if (res.status === 401) {
+      alert("That password was not accepted.");
+    } else if (res.status === 503) {
+      alert("Editing is not configured on this server.");
+    } else {
+      alert("Login failed (" + res.status + ").");
+    }
+  } catch (e) {
+    alert("Network error during login — is the server running?");
+  }
+}
+
+function updateAuthUI() {
+  const btn = document.getElementById("login-btn");
+  if (editPassword) { btn.textContent = "Log out"; btn.classList.add("active"); }
+  else { btn.textContent = "Log in to edit"; btn.classList.remove("active"); }
 }
 
 // ---------- Edit form ----------
@@ -795,6 +839,7 @@ document.getElementById("f-hh").addEventListener("change", applyFilters);
 document.getElementById("f-ami").addEventListener("change", applyFilters);
 
 // Initial load
+updateAuthUI();
 loadData();
 </script>
 </body>

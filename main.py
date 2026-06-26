@@ -316,6 +316,12 @@ def list_organizations():
             return [dict(r) for r in cur.fetchall()]
 
 
+@app.get("/api/auth/check")
+def auth_check(_: None = Depends(require_edit_auth)):
+    """Returns 200 if the supplied edit password is valid, 401 otherwise. Used by the login button."""
+    return {"ok": True}
+
+
 @app.post("/api/organizations")
 def create_organization(payload: OrganizationCreate, _: None = Depends(require_edit_auth)):
     data = payload.model_dump(exclude_unset=True)
